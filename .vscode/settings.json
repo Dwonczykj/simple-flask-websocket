@@ -20,4 +20,5 @@
         "reportMissingSuperCall": "none",
         "reportUnnecessaryIsInstance": "none"
     },
+    "cmake.configureOnOpen": false,
 }

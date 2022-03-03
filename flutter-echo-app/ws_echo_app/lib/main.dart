@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:socket_io_client/socket_io_client.dart' as io;
 
 void main() {
   runApp(const MyApp());
@@ -57,10 +59,16 @@ class _MyHomePageState extends State<MyHomePage> {
   static String appPort = '8444';
   static String apiUrl = 'http://$appHost:$appPort';
   static String wsUrl = 'ws://$appHost:$appPort/websocket';
+  static String socketIoUrl = 'ws://$appHost:$appPort/socket.io';
 
-  final _channel = WebSocketChannel.connect(Uri.parse(
-          wsUrl) // https://blog.postman.com/introducing-postman-websocket-echo-service/
-      );
+  // final _channel = WebSocketChannel.connect(Uri.parse(
+  //         wsUrl) // https://blog.postman.com/introducing-postman-websocket-echo-service/
+  //     );
+
+  final _channel = SocketService()
+    ..createSocketConnection(
+        socketIoUrl // https://blog.postman.com/introducing-postman-websocket-echo-service/
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -111,5 +119,44 @@ class _MyHomePageState extends State<MyHomePage> {
     _channel.sink.close();
     _controller.dispose();
     super.dispose();
+  }
+}
+
+class SocketService {
+  final _streamController = StreamController<dynamic>();
+
+  get stream => _streamController.stream;
+
+  get sink => _streamController.sink;
+
+  createSocketConnection(String socketIoUrl) {
+    var socket = io.io(socketIoUrl, {
+      'transports': ['websocket'],
+      'autoConnect': true,
+    })
+      ..on('connect', (_) {
+        print('connected to socketio from flutter SocketService');
+      })
+      ..on('disconnect', (_) {
+        print('disconnected from socketio in flutter SocketService');
+      });
+
+    print(socket.id);
+    print(socket.connected);
+    //socket.off('active_bands');
+
+    socket.emit('add_band', {'name': 'fluttertutorial'});
+    socket.on('active_bands', _eventHandler);
+    socket.on('message', _msgEventHandler);
+  }
+
+  void _eventHandler(dynamic object) {
+    print(object);
+    _streamController.add(object);
+  }
+
+  void _msgEventHandler(dynamic object) {
+    print('message event handler: $object');
+    _streamController.add(object);
   }
 }

@@ -3,9 +3,9 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "compounds": [
+    "compounds": [ // https://github.com/microsoft/vscode/issues/14842#issuecomment-257818614
         {
-            "name": "Compound",
+            "name": "Compound - Flask & Flutter",
             "configurations": [
                 "Python: App.py - Debug Flask",
                 "Flutter",
@@ -29,6 +29,7 @@
             "type": "python",
             "request": "launch",
             "module": "app",
+            "cwd": "${workspaceFolder}/flask-server",
             "gevent": true, //Needed for using websockets to avoid error: PYDEV DEBUGGER WARNING: \n sys.settrace() should not be used when the debugger is being used.
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/flask-server/",
@@ -73,6 +74,26 @@
                 ""
             ],
             "jinja": true
+        },
+        {
+            "name": "Python: app_test",
+            "type": "python",
+            "request": "launch",
+            "module": "app",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/flask-server/"
+            }
+        },
+        {
+            "name": "Python: test",
+            "type": "python",
+            "request": "launch",
+            "module": "test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/flask-server/"
+            }
         },
         {
             "name": "Python: Current File",

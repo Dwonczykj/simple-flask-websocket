@@ -1,23 +1,29 @@
 from __future__ import annotations, print_function
 from datetime import date
-from typing import TextIO, Tuple
+import logging
+from typing import Any, TextIO, Tuple
 from enum import Enum
 from colorama import Fore, Style
 from flask import Flask, jsonify, request
-from flask.wrappers import Response, Request
+from flask.wrappers import Response
 from http import HTTPStatus
 import os
-from geventwebsocket.handler import WebSocketHandler
-from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
-from gevent.pywsgi import WSGIServer
+# from geventwebsocket.handler import WebSocketHandler
+# from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
+# from gevent.pywsgi import WSGIServer
+from flask_socketio import SocketIO, send, emit
+# from flask_socketio.exceptions
+
 
 class SocketType(Enum):
-    socketio = 0
-    WSGIServer = 1
+    flask_socketio = 0
+    gevents_socketio = 1
+    WSGIServer = 2
     
+wsConnType = SocketType.flask_socketio
+use_https = False
 app = Flask(__name__)
-# TODO P1 v1.0: Read from Env File (Check the clickshop code for example...) - for secret config, 
-# not for how to set config on a flask app
+
 app.config['GEMBER_HTTPS_KEYFILE'] = '/private/etc/ssl/localhost/localhost.key'
 app.config['GEMBER_HTTPS_CERTFILE'] = '/private/etc/ssl/localhost/localhost.crt'
 app.config['GEMBER_BIND_HOST'] = '127.0.0.1'
@@ -46,92 +52,170 @@ def anon():
 def indexwName(name):
     return wrap_CORS_response(response=Response(f'hi {name}', status=HTTPStatus.OK))
 
+socketio = SocketIO(app, path='socket.io')
+
+def handle_message(message:str):
+    logging.debug(
+        f'Client: [{message}], Server: [Message handled]')
+
+@socketio.on('message')
+def handle_message_socketio(message):
+    '''Client sends us a message:str -> simply return the same message back to the client'''
+    handle_message(message)
+    send(
+        f'Client: [{message}], Server: [This is my response :)]')
+
 
 HOST = app.config['GEMBER_BIND_HOST']  # or try '0.0.0.0'
 PORT = app.config['GEMBER_PORT']
-use_https = False
+
 ssl_args = {}
 if use_https:
     ssl_args = {
         'keyfile': app.config.get('GEMBER_HTTPS_KEYFILE'),
         'certfile': app.config.get('GEMBER_HTTPS_CERTFILE')
     }
-wsConnType = SocketType.WSGIServer
     
-if __name__ == '__main__':
-    # from httpRoutes import *
-    
-    # https://kracekumar.com/post/54437887454/ssl-for-flask-local-development/
-    
-    # ------------------------------------------Socketio----------------------------------------------------
-    
-    if wsConnType == SocketType.socketio:
-        from flask_socketio import SocketIO, send, emit
-        socketio = SocketIO(app)
-        socketio.run(app, host=HOST, port=PORT) # BUG: eventlet doesnt support ssl_context kwargs.
-        # socketio.run(app, host=HOST, port=PORT, ssl_context='adhoc') 
-        
-        # NOTE: The default Flask development server doesn't support websockets so you'll need to use another server. Thankfully it's simple to get eventlet working with Flask. All you should have to do is install the eventlet package using pip.
-        # $ (conda venv) conda install -c conda-forge eventlet
-        # Once eventlet is installed socketio will detect and use it when running the server.
-        # You can use chrome to double check what transport method is being used. 
-        #   Open your chrome dev tools Ctrl+Shift+I in Windows and go to the Network tab. 
-        #   On each network request you should see either transport=polling or transport=websocket
-        # If running flask app on Heroku, use these links to set up SSL:
-        # https://www.digitalocean.com/community/tutorials/how-to-create-a-self-signed-ssl-certificate-for-nginx-in-ubuntu-18-04
-        # https://stackoverflow.com/questions/53992331/cant-connect-to-flask-socketio-via-wss-but-works-via-ws
-        
 
-    # -------------------------BASIC Server-------------------------
+# https://kracekumar.com/post/54437887454/ssl-for-flask-local-development/
+
+
+
+httpEchoApplication = app
+
+
     
+
+
+
+ 
+# Link to the original issue with Socket-IO using flutter: https://stackoverflow.com/questions/60348534/connecting-flask-socket-io-server-and-flutter
+logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().addHandler(logging.FileHandler('gpAppLog.log'))
+if use_https:
+    pass
+    # logging.debug(Fore.BLUE + 'Running HTTPS' + Style.RESET_ALL)
+    # https_server = WSGIServer((HOST,PORT), 
+    #                             Resource({
+    #                                 '/': httpEchoApplication, 
+    #                                 '/websocket': WSEchoApplication
+    #                                 }),
+    #                             handler_class=WebSocketHandler, 
+    #                             **ssl_args)
+    # https_server.serve_forever()
+else:
+    # with CaptureOutput() as capturer:
+    logging.debug(Fore.YELLOW + 'Running HTTP' + Style.RESET_ALL)
     if wsConnType == SocketType.WSGIServer:
-        class WSEchoApplication(WebSocketApplication):
-            def on_open(self):
-                print(Fore.YELLOW,"Connection opened",Style.RESET_ALL)
+        pass
+    elif wsConnType == SocketType.flask_socketio:
+        pass
+    elif wsConnType == SocketType.gevents_socketio:
+        # def not_found(start_response):
+        #     start_response('404 Not Found', [])
+        #     return ['<h1>Not Found</h1>']
 
-            def on_message(self, message):
-                print(Fore.CYAN,message,Style.RESET_ALL)
-                self.ws.send(message)
+        # from gevent import monkey
+        # monkey.patch_all()
 
-            def on_close(self, reason):
-                print(Fore.YELLOW,reason,Style.RESET_ALL)
-                
+        # from socketio import socketio_manage
+        # from socketio.server import SocketIOServer
+        # from socketio.namespace import BaseNamespace
+        # from socketio.mixins import RoomsMixin, BroadcastMixin
+
+        # class ChatNamespace(BaseNamespace, RoomsMixin, BroadcastMixin):
+
+        #     def on_nickname(self, nickname):
+        #         self.request['nicknames'].append(nickname)
+        #         self.socket.session['nickname'] = nickname
+        #         self.broadcast_event('announcement', '%s has connected' % nickname)
+        #         self.broadcast_event('nicknames', self.request['nicknames'])
+        #         # Just have them join a default-named room
+        #         self.join('main_room')
+
+        #     def recv_disconnect(self):
+        #         # Remove nickname from the list.
+        #         nickname = self.socket.session['nickname']
+        #         self.request['nicknames'].remove(nickname)
+        #         self.broadcast_event(
+        #             'announcement', '%s has disconnected' % nickname)
+        #         self.broadcast_event('nicknames', self.request['nicknames'])
+
+        #         self.disconnect(silent=True)
+
+        #     def on_user_message(self, msg):
+        #         self.emit_to_room('main_room', 'msg_to_room',
+        #                         self.socket.session['nickname'], msg)
+
+        #     def recv_message(self, message):
+        #         print("PING!!!", message)
         
+        # class WSEchoApp2(WSEchoApplication):
+        #     def __init__(self):
+        #         self.buffer = []
+        #         # Dummy request object to maintain state between Namespace
+        #         # initialization.
+        #         self.request = {
+        #             'nicknames': [],
+        #         }
+
+
+        #     def __call__(self, environ, start_response):
+        #         path = environ['PATH_INFO'].strip('/')
+
+        #         if not path:
+        #             start_response('200 OK', [('Content-Type', 'text/html')])
+        #             return ['<h1>Welcome. '
+        #                     'Try the <a href="/chat.html">chat</a> example.</h1>']
+
+        #         if path.startswith('static/') or path == 'chat.html':
+        #             try:
+        #                 data = open(path).read()
+        #             except Exception:
+        #                 return not_found(start_response)
+
+        #             if path.endswith(".js"):
+        #                 content_type = "text/javascript"
+        #             elif path.endswith(".css"):
+        #                 content_type = "text/css"
+        #             elif path.endswith(".swf"):
+        #                 content_type = "application/x-shockwave-flash"
+        #             else:
+        #                 content_type = "text/html"
+
+        #             start_response('200 OK', [('Content-Type', content_type)])
+        #             return [data]
+
+        #         if path.startswith("socket.io"):
+        #             socketio_manage(environ, {'': ChatNamespace}, self.request)
+        #         else:
+        #             return not_found(start_response)
         
-        
-        httpEchoApplication = app
-            
-    
-        try:
-            import logging
-            # import subprocess
-            # from capturer import CaptureOutput
-            # , filename='app.log'
-            # logging.basicConfig(level=logging.DEBUG)
-            # Link to the original issue with Socket-IO using flutter: https://stackoverflow.com/questions/60348534/connecting-flask-socket-io-server-and-flutter
-            logging.getLogger().setLevel(logging.DEBUG)
-            logging.getLogger().addHandler(logging.FileHandler('gpAppLog.log'))
-            if use_https:
-                logging.debug(Fore.BLUE + 'Running HTTPS' + Style.RESET_ALL)
-                https_server = WSGIServer((HOST,PORT), 
-                                          Resource({
-                                              '/': httpEchoApplication, 
-                                              '/websocket': WSEchoApplication
-                                              }),
-                                          handler_class=WebSocketHandler, 
-                                          **ssl_args)
-                https_server.serve_forever()
-            else:
-                # with CaptureOutput() as capturer:
-                logging.debug(Fore.YELLOW + 'Running HTTP' + Style.RESET_ALL)
-                _app = Resource({
-                    '/': httpEchoApplication, 
-                    '/websocket': WSEchoApplication
-                }) # Turn EchoApplication into MyApp 
-                http_server = WSGIServer((HOST,PORT), 
-                                         _app, 
-                                         handler_class=WebSocketHandler)
-                http_server.serve_forever()
-        except Exception as e:
-            logging.debug(
-                Fore.RED + f'WebApp level exception at app.py of: \n\t{e}' + Style.RESET_ALL)
+        pass
+    else:
+        raise Exception('Not implemented')
+
+
+if __name__ == '__main__':
+    # if wsConnType == SocketType.WSGIServer:
+        # class WSEchoApplication(WebSocketApplication):
+        #     def on_open(self):
+        #         print(Fore.YELLOW, "Connection opened", Style.RESET_ALL)
+
+        #     def on_message(self, message):
+        #         print(Fore.CYAN, message, Style.RESET_ALL)
+        #         self.ws.send(message)
+
+        #     def on_close(self, reason):
+        #         print(Fore.YELLOW, reason, Style.RESET_ALL)
+        # WSGIServer((HOST, PORT),
+        #            Resource({
+        #                '/': httpEchoApplication,
+        #                '/websocket': WSEchoApplication
+        #            }),
+        #            handler_class=WebSocketHandler).serve_forever()
+    if wsConnType == SocketType.flask_socketio:
+        socketio.run(httpEchoApplication, host=HOST, port=PORT)
+    if wsConnType == SocketType.gevents_socketio:
+        pass
+
