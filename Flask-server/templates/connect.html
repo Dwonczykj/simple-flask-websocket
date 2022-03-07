@@ -1,0 +1,185 @@
+<html>
+
+<head></head>
+
+<body>
+    <h1 id="connection-status" style="color:red">Establishing connection to websocket...</h1>
+
+    <button id="say-hi" style="height: 40px; width: 200px; background-color: aquamarine;" onclick="sayHi();"> Say hi to
+        us </button>
+    <button id="start-app" style="height: 40px; width: 200px; background-color: rgb(102, 211, 92);"
+        onclick="startSimulation();"> Start simulation </button>
+
+    <p id="log"></p>
+    <h3 style="color:grey">Our response:</h3>
+    <p style="color:blue" id="server-response"></p>
+
+
+    <p id="multiThreadTest1">Incomplete T1</p>
+    <p id="multiThreadTest2">Incomplete T2</p>
+    <p id="socket-protocol">Iteration Counter: null</p>
+    <div style="flex-direction: row; align-items: flex-start;">
+        <button style="height: 40px; width: 200px; background-color: rgb(56, 110, 180);"
+            onclick="multiThreadTest1('run');">Run simulation (background thread)</button>
+        <button style="height: 40px; width: 200px; background-color: rgb(56, 110, 180);"
+            onclick="multiThreadTest2('app/purchase-delay', 3.0);">Set Purchase Delay 3s</button>
+        <button style="height: 40px; width: 200px; background-color: rgb(158, 39, 39);"
+            onclick="resetTests();">Reset</button>
+        <button style="height: 40px; width: 200px; background-color: rgb(238, 203, 6);" onclick="runFullSim();">Run Full
+            Sim</button>
+    </div>
+    <div>
+        <p id="full-sim"></p>
+    </div>
+    <code>{{json}}</code>
+</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
+    integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
+    crossorigin="anonymous">
+    </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+<script>
+    function sayHi() {
+        console.debug('sayHi clicked');
+        ws.send(JSON.stringify({ 'type': 'message', 'data': 'a message from joey d' }));
+    }
+
+    function startSimulation() {
+        console.debug('startSimulation clicked');
+        ws.send(JSON.stringify({ 'type': 'start isolated simulation', 'data': '' }));
+    }
+
+    function runFullSim() {
+        statusEl = document.getElementById('full-sim')
+        const params = {
+            'maxN': 20,
+            'convergence_threshold': 0.1,
+        };
+        const options = {
+            method: 'POST',
+            body: JSON.stringify(params)
+        };
+        fetch("http://" + document.domain + ":8444/run-full-sim", options)
+            .then(response => {
+                try {
+                    return response.json(); // read the response  stream using response.json() or response.text()
+                } catch (error) {
+                    return response.text(); // read the response  stream using response.json() or response.text()
+                }
+            })
+            .then(r => JSON.stringify(r))
+            .then(response => {
+                console.info(response);
+                statusEl.innerText = 'Run Full Simulation call Done -> ' + response;
+            });
+
+    }
+    function multiThreadTest1(arg) {
+        statusEl = document.getElementById('multiThreadTest1')
+        const params = {
+            // 'retailer_name': 'Tescos',
+            // 'retailer_strategy': 'COMPETITIVE',
+            // 'retailer_sustainability': 'AVERAGE',
+        };
+        const options = {
+            method: 'POST',
+            body: JSON.stringify(params)
+        };
+        fetch("http://" + document.domain + ":8444/" + arg, options)
+            .then(response => {
+                try {
+                    return response.json(); // read the response  stream using response.json() or response.text()
+                } catch (error) {
+                    return response.text(); // read the response  stream using response.json() or response.text()
+                }
+            })
+            .then(r => JSON.stringify(r))
+            .then(response => {
+                console.info(response);
+                statusEl.innerText = arg + ' call Done -> ' + response;
+            });
+
+    }
+    function multiThreadTest2(arg, delaySecs) {
+        statusEl = document.getElementById('multiThreadTest2')
+        const params = {
+
+        };
+        const options = {
+            method: 'POST',
+            body: JSON.stringify(params)
+        };
+        fetch("http://" + document.domain + ":8444/app/purchase-delay/3", options)
+            .then(response => {
+                try {
+                    return response.text(); // read the response  stream using response.json() or response.text()
+                } catch (error) {
+                    return response.text(); // read the response  stream using response.json() or response.text()
+                }
+            })
+            .then(r => {
+                if (typeof (r) == 'string') {
+                    return r;
+                } else {
+                    return JSON.stringify(r);
+                }
+            })
+            .then(response => {
+                console.info(response);
+                statusEl.innerText = 'purchase-delay Done -> ' + response;
+            })
+            .catch(e => {
+                console.warn(e);
+                statusEl.innerText = 'purchase-delay Errored: ' + e.message;
+            });
+
+    }
+    function resetTests() {
+        document.getElementById('multiThreadTest1').innerText = "Incomplete T1";
+        document.getElementById('multiThreadTest2').innerText = "Incomplete T2";
+    }
+
+    $(document).ready(function () {
+        var status_el = document.getElementById('socket-protocol');
+
+        // var socket = io({ transports: ['polling', 'websocket'], upgrade: false });
+        var socket = io({ transports: ['websocket'], upgrade: false });
+
+        socket.on('connect', function () {
+            socket.emit('my event', { data: 'I\'m connected!' });
+            console.info('Connected to socketio (' + socket.io.uri + socket.io.opts.path + ') with protocol: ' + socket.io.engine.transport.query.EIO);
+            console.log(socket.io.uri);
+            status_el.text = 'Connected to socketio with protocol: ' + socket.io.engine.transport.query.EIO;
+        });
+
+        // if ("WebSocket" in window) {
+        //     ws = new WebSocket("ws://" + document.domain + ":8444/websocket");
+        //     ws.onmessage = function (msg) {
+        //         console.info(msg);
+        //         var message = JSON.parse(msg.data);
+        //         $("p#log").text(message.data);
+
+        //         if (message.type == 'simulation iteration completed') {
+
+        //             status_el.innerText = "Iteration number: (" + message.data.iteration_number + ")";
+        //         }
+        //     };
+        // };
+
+        // Bind send button to websocket
+        $("button#send").live("click", function () {
+            ws.send(JSON.stringify({ 'data': 'Sent from my browser!' }));
+        });
+
+        // Cleanly close websocket when unload window
+        window.onbeforeunload = function () {
+            ws.onclose = function () { }; // disable onclose handler first
+            ws.close()
+        };
+
+
+    });
+</script>
+
+
+</html>

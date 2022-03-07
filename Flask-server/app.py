@@ -4,7 +4,7 @@ import logging
 from typing import Any, TextIO, Tuple
 from enum import Enum
 from colorama import Fore, Style
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, make_response, render_template, request
 from flask.wrappers import Response
 from http import HTTPStatus
 import os
@@ -23,6 +23,15 @@ class SocketType(Enum):
 wsConnType = SocketType.flask_socketio
 use_https = False
 app = Flask(__name__)
+
+socketio = SocketIO(app, path='socket.io',
+                    cors_allowed_origins="*", 
+                    logger=True, 
+                    engineio_logger=True,
+                    # allow_upgrades=False, 
+                    async_mode='eventlet')
+
+
 
 app.config['GEMBER_HTTPS_KEYFILE'] = '/private/etc/ssl/localhost/localhost.key'
 app.config['GEMBER_HTTPS_CERTFILE'] = '/private/etc/ssl/localhost/localhost.crt'
@@ -52,18 +61,70 @@ def anon():
 def indexwName(name):
     return wrap_CORS_response(response=Response(f'hi {name}', status=HTTPStatus.OK))
 
-socketio = SocketIO(app, path='socket.io')
+
+@app.route('/connect')
+def connect():
+    response = make_response(render_template('connect.html', json={}))
+    response.headers['X-Parachutes'] = 'parachutes are cool'
+    return wrap_CORS_response(response)
+
+
+@app.route('/start', methods=['GET'])
+def startApp():
+
+    
+    # TODO v1.0: This should then get app to push an event called initial state to the websocket whcih tells us we can load views,
+    #    show a loading spinner until then.
+    # TODO v1.2: Subscribe to stream
+    response = wrap_CORS_response(make_response(render_template(
+        'connect.html', json={})))
+    response.headers['X-Parachutes'] = 'parachutes are cool'
+    return response
+
 
 def handle_message(message:str):
     logging.debug(
         f'Client: [{message}], Server: [Message handled]')
 
 @socketio.on('message')
-def handle_message_socketio(message):
+def handle_message_socketio_global(message:str):
     '''Client sends us a message:str -> simply return the same message back to the client'''
+    print('Messaged receive over socketio global nsp successfully')
     handle_message(message)
     send(
-        f'Client: [{message}], Server: [This is my response :)]')
+        f'Client: [{message}], Server: [This is my response :) on global nsp]')
+
+
+@socketio.on('message', namespace='/socket.io')
+def handle_message_socketio(message:str):
+    '''Client sends us a message:str -> simply return the same message back to the client'''
+    print('Messaged receive over socketio socketio nsp successfully')
+    handle_message(message)
+    send(
+        f'Client: [{message}], Server: [This is my response :) on socket.io nsp]')
+    
+@socketio.on('connect')
+def on_connect_socketio_global():
+    print('Connected to socketio global space successfully - JoeyD woz here')
+    emit('fromServer', 'server says hi...')
+    
+@socketio.on('connect', namespace='/socket.io')
+def on_connect_socketio():
+    print('Connected to socketio namespace successfully - JoeyD woz here')
+    emit('fromServer', 'server says hi...')
+
+@socketio.on('json')
+def on_jsonblob_socketio(jsonBlob):
+    print('Received Event from socket connection')
+
+@socketio.on('event')
+def on_event_socketio(event):
+    print('Received Event from socket connection')
+
+
+@socketio.on('add_band')
+def on_add_band_socketio(event):
+    print('Received add_band from socket connection')
 
 
 HOST = app.config['GEMBER_BIND_HOST']  # or try '0.0.0.0'
@@ -215,7 +276,11 @@ if __name__ == '__main__':
         #            }),
         #            handler_class=WebSocketHandler).serve_forever()
     if wsConnType == SocketType.flask_socketio:
-        socketio.run(httpEchoApplication, host=HOST, port=PORT)
+        socketio.run(httpEchoApplication, host=HOST, port=PORT
+                     , log_output=True
+                     , debug=True
+                     , use_reloader=False
+                     )
     if wsConnType == SocketType.gevents_socketio:
         pass
 

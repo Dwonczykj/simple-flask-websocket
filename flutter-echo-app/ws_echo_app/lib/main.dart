@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:socket_io_client/socket_io_client.dart' as io;
 
 void main() {
   runApp(const MyApp());
@@ -57,7 +58,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   static String appHost = '127.0.0.1';
   static String appPort = '8444';
-  static String apiUrl = 'http://$appHost:$appPort';
+  static String apiUrl = 'http://$appHost:$appPort/';
   static String wsUrl = 'ws://$appHost:$appPort/websocket';
   static String socketIoUrl = 'ws://$appHost:$appPort/socket.io';
 
@@ -67,8 +68,15 @@ class _MyHomePageState extends State<MyHomePage> {
 
   final _channel = SocketService()
     ..createSocketConnection(
+        apiUrl // https://blog.postman.com/introducing-postman-websocket-echo-service/
+        );
+
+  final _socketioNamespaceChannel = SocketService()
+    ..createSocketConnection(
         socketIoUrl // https://blog.postman.com/introducing-postman-websocket-echo-service/
         );
+
+  List<dynamic> items = <String>[''];
 
   @override
   Widget build(BuildContext context) {
@@ -88,14 +96,30 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
             const SizedBox(height: 24),
-            StreamBuilder(
-              stream: _channel.stream,
-              builder: (context, snapshot) {
-                return Text(snapshot.hasData ? '${snapshot.data}' : '');
-              },
+            Container(
+              height: 300,
+              alignment: Alignment.center,
+              child: StreamBuilder(
+                stream: _channel.stream,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    items.add(snapshot.data);
+                    //print every second: [0] then [0,1] then [0,1,2] ...
+                  }
+                  return ListView(
+                    children: items
+                        .sublist(math.max(0, items.length - 3))
+                        .map((item) => ListTile(
+                              title: Text(item.toString()),
+                            ))
+                        .toList(),
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 24),
-            Text('Socket endpoint: $wsUrl')
+            Text(
+                'Socket endpoint: $socketIoUrl is ${_channel.connectionStatus} with EIO: ${_channel.protocol}')
           ],
         ),
       ),
@@ -109,8 +133,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _sendMessage() {
     if (_controller.text.isNotEmpty) {
-      _channel.sink
-          .add(jsonEncode({'type': 'message', 'data': _controller.text}));
+      // _channel.sink
+      //     .add(jsonEncode({'type': 'message', 'data': _controller.text}));
+      _channel.emit('message', _controller.text);
+      _socketioNamespaceChannel.emit(
+          'message', '${_controller.text} on socket.io nsp channel');
+      _controller.clear();
     }
   }
 
@@ -129,8 +157,15 @@ class SocketService {
 
   get sink => _streamController.sink;
 
+  io.Socket? socket;
+
+  String get protocol => socket?.io.uri ?? 'N/A';
+
+  String get connectionStatus =>
+      ((socket?.connected ?? false) ? 'connected' : null) ?? 'diconnected';
+
   createSocketConnection(String socketIoUrl) {
-    var socket = io.io(socketIoUrl, {
+    var _socket = io.io(socketIoUrl, {
       'transports': ['websocket'],
       'autoConnect': true,
     })
@@ -139,15 +174,54 @@ class SocketService {
       })
       ..on('disconnect', (_) {
         print('disconnected from socketio in flutter SocketService');
-      });
+      })
+      ..on('message', _msgEventHandler);
 
-    print(socket.id);
-    print(socket.connected);
+    socket = _socket;
+
+    _socket.onConnect((_) {
+      print('connect');
+      _socket.emit('message', 'test message from Joey D');
+      print('Connected Status: ${_socket.connected}');
+      print('Socket ID: ${_socket.id}');
+    });
+
+    _socket.on('event', (data) => print(data));
+    _socket.onDisconnect((_) => print('disconnect'));
+    _socket.on('fromServer', (_) => print(_));
+
     //socket.off('active_bands');
+    // socket?.onConnect((data) {
+    //   socket?.emit('message', {'some': 'thing'});
+    // });
+    // socket?.onConnectError((data) => print(data));
+    _socket.emit('add_band', {'name': 'fluttertutorial'});
+    _socket.on('active_bands', _eventHandler);
+    _socket.on('message', _msgEventHandler);
+  }
 
-    socket.emit('add_band', {'name': 'fluttertutorial'});
-    socket.on('active_bands', _eventHandler);
-    socket.on('message', _msgEventHandler);
+  _socketStatus(dynamic status) {
+    print('socketio status: $status');
+  }
+
+  // SocketIO? socketIO;
+
+  // createSocketConnection2(String url) {
+  //   socketIO = SocketIOManager().createSocketIO(url, "/chat",
+  //       query: "userId=21031", socketStatusCallback: _socketStatus);
+
+  //   //call init socket before doing anything
+  //   socketIO!.init();
+
+  //   //subscribe event
+  //   socketIO!.subscribe("message", _msgEventHandler);
+
+  //   //connect socket
+  //   socketIO!.connect();
+  // }
+
+  void emit(String event, [dynamic data = const <String, dynamic>{}]) {
+    socket?.emit(event, data);
   }
 
   void _eventHandler(dynamic object) {
